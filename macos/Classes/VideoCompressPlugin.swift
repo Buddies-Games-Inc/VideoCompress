@@ -168,6 +168,7 @@ public class VideoCompressPlugin: NSObject, FlutterPlugin {
         if !isIncludeAudio {
             let compressionVideoTrack = composition.addMutableTrack(withMediaType: AVMediaType.video, preferredTrackID: kCMPersistentTrackID_Invalid)
             compressionVideoTrack!.preferredTransform = sourceVideoTrack.preferredTransform
+            print("VideoCompressPlugin: Adding video track to composition with timeRange: \(CMTimeGetSeconds(timeRange.start))s to \(CMTimeGetSeconds(timeRange.start) + CMTimeGetSeconds(timeRange.duration))s")
             try? compressionVideoTrack!.insertTimeRange(timeRange, of: sourceVideoTrack, at: CMTime.zero)
         } else {
             return sourceVideoTrack.asset!
@@ -195,6 +196,21 @@ public class VideoCompressPlugin: NSObject, FlutterPlugin {
         let minDuration = Double(duration ?? videoDuration)
         let maxDurationTime = minStartTime + minDuration < videoDuration ? minDuration : videoDuration
         
+        // Log relevant values for debugging from Flutter
+        print("VideoCompressPlugin: compressVideo called")
+        print("  path: \(path)")
+        print("  quality: \(quality)")
+        print("  deleteOrigin: \(deleteOrigin)")
+        print("  startTime: \(String(describing: startTime))")
+        print("  duration: \(String(describing: duration))")
+        print("  includeAudio: \(String(describing: includeAudio))")
+        print("  frameRate: \(String(describing: frameRate))")
+        print("  sourceVideoUrl: \(sourceVideoUrl)")
+        print("  compressionUrl: \(compressionUrl)")
+        print("  videoDuration: \(videoDuration)")
+        print("  minStartTime: \(minStartTime)")
+        print("  minDuration/requested: \(minDuration)")
+        print("  maxDurationTime: \(maxDurationTime)")
         let cmStartTime = CMTimeMakeWithSeconds(minStartTime, preferredTimescale: timescale)
         let cmDurationTime = CMTimeMakeWithSeconds(maxDurationTime, preferredTimescale: timescale)
         let timeRange: CMTimeRange = CMTimeRangeMake(start: cmStartTime, duration: cmDurationTime)
