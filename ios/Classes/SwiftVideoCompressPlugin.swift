@@ -38,8 +38,8 @@ public class SwiftVideoCompressPlugin: NSObject, FlutterPlugin {
             let path = args!["path"] as! String
             let quality = args!["quality"] as! NSNumber
             let deleteOrigin = args!["deleteOrigin"] as! Bool
-            let startTime = args!["startTime"] as? Double
-            let duration = args!["duration"] as? Double
+            let startTime = args!["startTime"] as? Int
+            let duration = args!["duration"] as? Int
             let includeAudio = args!["includeAudio"] as? Bool
             let frameRate = args!["frameRate"] as? Int
             compressVideo(path, quality, deleteOrigin, startTime, duration, includeAudio,
@@ -161,22 +161,28 @@ public class SwiftVideoCompressPlugin: NSObject, FlutterPlugin {
         }
     }
     
-    private func getComposition(_ isIncludeAudio: Bool,_ timeRange: CMTimeRange, _ sourceVideoTrack: AVAssetTrack)->AVAsset {
+    private func getComposition(_ isIncludeAudio: Bool,_ timeRange: CMTimeRange, _ sourceVideoTrack: AVAssetTrack, _ sourceVideoAsset: AVAsset)->AVAsset {
         let composition = AVMutableComposition()
-        if !isIncludeAudio {
-            let compressionVideoTrack = composition.addMutableTrack(withMediaType: AVMediaType.video, preferredTrackID: kCMPersistentTrackID_Invalid)
-            compressionVideoTrack!.preferredTransform = sourceVideoTrack.preferredTransform
-            print("VideoCompressPlugin: Adding video track to composition with timeRange: \(CMTimeGetSeconds(timeRange.start))s to \(CMTimeGetSeconds(timeRange.start) + CMTimeGetSeconds(timeRange.duration))s")
-            try? compressionVideoTrack!.insertTimeRange(timeRange, of: sourceVideoTrack, at: CMTime.zero)
-        } else {
-            return sourceVideoTrack.asset!
+        
+        // Always add video track with timeRange trimming
+        let compressionVideoTrack = composition.addMutableTrack(withMediaType: AVMediaType.video, preferredTrackID: kCMPersistentTrackID_Invalid)
+        compressionVideoTrack!.preferredTransform = sourceVideoTrack.preferredTransform
+        print("VideoCompressPlugin: Adding video track to composition with timeRange: \(CMTimeGetSeconds(timeRange.start))s to \(CMTimeGetSeconds(timeRange.start) + CMTimeGetSeconds(timeRange.duration))s")
+        try? compressionVideoTrack!.insertTimeRange(timeRange, of: sourceVideoTrack, at: CMTime.zero)
+        
+        // Add audio track if requested
+        if isIncludeAudio {
+            if let audioTrack = sourceVideoAsset.tracks(withMediaType: AVMediaType.audio).first {
+                let compressionAudioTrack = composition.addMutableTrack(withMediaType: AVMediaType.audio, preferredTrackID: kCMPersistentTrackID_Invalid)
+                try? compressionAudioTrack!.insertTimeRange(timeRange, of: audioTrack, at: CMTime.zero)
+            }
         }
         
         return composition    
     }
     
-    private func compressVideo(_ path: String,_ quality: NSNumber,_ deleteOrigin: Bool,_ startTime: Double?,
-                               _ duration: Double?,_ includeAudio: Bool?,_ frameRate: Int?,
+    private func compressVideo(_ path: String,_ quality: NSNumber,_ deleteOrigin: Bool,_ startTime: Int?,
+                               _ duration: Int?,_ includeAudio: Bool?,_ frameRate: Int?,
                                _ result: @escaping FlutterResult) {
         let sourceVideoUrl = Utility.getPathUrl(path)
         let sourceVideoType = "mp4"
@@ -189,34 +195,19 @@ public class SwiftVideoCompressPlugin: NSObject, FlutterPlugin {
         Utility.getPathUrl("\(Utility.basePath())/\(Utility.getFileName(path))\(uuid.uuidString).\(sourceVideoType)")
 
         let timescale = sourceVideoAsset.duration.timescale
-        let minStartTime = Double(startTime ?? 0)
+        let minStartTime = Int(startTime ?? 0)
         
         let videoDuration = sourceVideoAsset.duration.seconds
-        let minDuration = Double(duration ?? videoDuration)
+        let minDuration = Int(duration ?? videoDuration)
         let maxDurationTime = minStartTime + minDuration < videoDuration ? minDuration : videoDuration
-        
-        // Log relevant values for debugging from Flutter
-        print("VideoCompressPlugin: compressVideo called")
-        print("  path: \(path)")
-        print("  quality: \(quality)")
-        print("  deleteOrigin: \(deleteOrigin)")
-        print("  startTime: \(String(describing: startTime))")
-        print("  duration: \(String(describing: duration))")
-        print("  includeAudio: \(String(describing: includeAudio))")
-        print("  frameRate: \(String(describing: frameRate))")
-        print("  sourceVideoUrl: \(sourceVideoUrl)")
-        print("  compressionUrl: \(compressionUrl)")
-        print("  videoDuration: \(videoDuration)")
-        print("  minStartTime: \(minStartTime)")
-        print("  minDuration/requested: \(minDuration)")
-        print("  maxDurationTime: \(maxDurationTime)")
+
         let cmStartTime = CMTimeMakeWithSeconds(minStartTime, preferredTimescale: timescale)
         let cmDurationTime = CMTimeMakeWithSeconds(maxDurationTime, preferredTimescale: timescale)
         let timeRange: CMTimeRange = CMTimeRangeMake(start: cmStartTime, duration: cmDurationTime)
         
         let isIncludeAudio = includeAudio != nil ? includeAudio! : true
         
-        let session = getComposition(isIncludeAudio, timeRange, sourceVideoTrack!)
+        let session = getComposition(isIncludeAudio, timeRange, sourceVideoTrack!, sourceVideoAsset)
         
         let exporter = AVAssetExportSession(asset: session, presetName: getExportPreset(quality))!
         
@@ -228,10 +219,6 @@ public class SwiftVideoCompressPlugin: NSObject, FlutterPlugin {
             let videoComposition = AVMutableVideoComposition(propertiesOf: sourceVideoAsset)
             videoComposition.frameDuration = CMTimeMake(value: 1, timescale: Int32(frameRate!))
             exporter.videoComposition = videoComposition
-        }
-        
-        if !isIncludeAudio {
-            exporter.timeRange = timeRange
         }
         
         Utility.deleteFile(compressionUrl.absoluteString)

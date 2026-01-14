@@ -163,15 +163,21 @@ public class VideoCompressPlugin: NSObject, FlutterPlugin {
         }
     }
     
-    private func getComposition(_ isIncludeAudio: Bool,_ timeRange: CMTimeRange, _ sourceVideoTrack: AVAssetTrack)->AVAsset {
+    private func getComposition(_ isIncludeAudio: Bool,_ timeRange: CMTimeRange, _ sourceVideoTrack: AVAssetTrack, _ sourceVideoAsset: AVAsset)->AVAsset {
         let composition = AVMutableComposition()
-        if !isIncludeAudio {
-            let compressionVideoTrack = composition.addMutableTrack(withMediaType: AVMediaType.video, preferredTrackID: kCMPersistentTrackID_Invalid)
-            compressionVideoTrack!.preferredTransform = sourceVideoTrack.preferredTransform
-            print("VideoCompressPlugin: Adding video track to composition with timeRange: \(CMTimeGetSeconds(timeRange.start))s to \(CMTimeGetSeconds(timeRange.start) + CMTimeGetSeconds(timeRange.duration))s")
-            try? compressionVideoTrack!.insertTimeRange(timeRange, of: sourceVideoTrack, at: CMTime.zero)
-        } else {
-            return sourceVideoTrack.asset!
+        
+        // Always add video track with timeRange trimming
+        let compressionVideoTrack = composition.addMutableTrack(withMediaType: AVMediaType.video, preferredTrackID: kCMPersistentTrackID_Invalid)
+        compressionVideoTrack!.preferredTransform = sourceVideoTrack.preferredTransform
+        print("VideoCompressPlugin: Adding video track to composition with timeRange: \(CMTimeGetSeconds(timeRange.start))s to \(CMTimeGetSeconds(timeRange.start) + CMTimeGetSeconds(timeRange.duration))s")
+        try? compressionVideoTrack!.insertTimeRange(timeRange, of: sourceVideoTrack, at: CMTime.zero)
+        
+        // Add audio track if requested
+        if isIncludeAudio {
+            if let audioTrack = sourceVideoAsset.tracks(withMediaType: AVMediaType.audio).first {
+                let compressionAudioTrack = composition.addMutableTrack(withMediaType: AVMediaType.audio, preferredTrackID: kCMPersistentTrackID_Invalid)
+                try? compressionAudioTrack!.insertTimeRange(timeRange, of: audioTrack, at: CMTime.zero)
+            }
         }
         
         return composition    
@@ -217,7 +223,7 @@ public class VideoCompressPlugin: NSObject, FlutterPlugin {
         
         let isIncludeAudio = includeAudio != nil ? includeAudio! : true
         
-        let session = getComposition(isIncludeAudio, timeRange, sourceVideoTrack!)
+        let session = getComposition(isIncludeAudio, timeRange, sourceVideoTrack!, sourceVideoAsset)
         
         let exporter = AVAssetExportSession(asset: session, presetName: getExportPreset(quality))!
         
@@ -229,10 +235,6 @@ public class VideoCompressPlugin: NSObject, FlutterPlugin {
             let videoComposition = AVMutableVideoComposition(propertiesOf: sourceVideoAsset)
             videoComposition.frameDuration = CMTimeMake(value: 1, timescale: Int32(frameRate!))
             exporter.videoComposition = videoComposition
-        }
-        
-        if !isIncludeAudio {
-            exporter.timeRange = timeRange
         }
         
         Utility.deleteFile(compressionUrl.absoluteString)
