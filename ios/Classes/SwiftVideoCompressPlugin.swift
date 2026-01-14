@@ -38,11 +38,8 @@ public class SwiftVideoCompressPlugin: NSObject, FlutterPlugin {
             let path = args!["path"] as! String
             let quality = args!["quality"] as! NSNumber
             let deleteOrigin = args!["deleteOrigin"] as! Bool
-            // startTime and duration are in milliseconds from Dart, convert to seconds
-            let startTimeMs = args!["startTime"] as? Int
-            let durationMs = args!["duration"] as? Int
-            let startTime = startTimeMs != nil ? Double(startTimeMs!) / 1000.0 : nil
-            let duration = durationMs != nil ? Double(durationMs!) / 1000.0 : nil
+            let startTime = args!["startTime"] as? Double
+            let duration = args!["duration"] as? Double
             let includeAudio = args!["includeAudio"] as? Bool
             let frameRate = args!["frameRate"] as? Int
             compressVideo(path, quality, deleteOrigin, startTime, duration, includeAudio,
@@ -169,6 +166,7 @@ public class SwiftVideoCompressPlugin: NSObject, FlutterPlugin {
         if !isIncludeAudio {
             let compressionVideoTrack = composition.addMutableTrack(withMediaType: AVMediaType.video, preferredTrackID: kCMPersistentTrackID_Invalid)
             compressionVideoTrack!.preferredTransform = sourceVideoTrack.preferredTransform
+            print("VideoCompressPlugin: Adding video track to composition with timeRange: \(CMTimeGetSeconds(timeRange.start))s to \(CMTimeGetSeconds(timeRange.start) + CMTimeGetSeconds(timeRange.duration))s")
             try? compressionVideoTrack!.insertTimeRange(timeRange, of: sourceVideoTrack, at: CMTime.zero)
         } else {
             return sourceVideoTrack.asset!
@@ -191,21 +189,27 @@ public class SwiftVideoCompressPlugin: NSObject, FlutterPlugin {
         Utility.getPathUrl("\(Utility.basePath())/\(Utility.getFileName(path))\(uuid.uuidString).\(sourceVideoType)")
 
         let timescale = sourceVideoAsset.duration.timescale
-        let minStartTime = startTime ?? 0.0
+        let minStartTime = Double(startTime ?? 0)
         
         let videoDuration = sourceVideoAsset.duration.seconds
-        // Calculate the maximum available duration from startTime to end of video
-        let availableDuration = videoDuration - minStartTime
-        // Use the requested duration, but cap it to available duration
-        let requestedDuration = duration ?? availableDuration
-        let maxDurationTime = min(requestedDuration, availableDuration)
+        let minDuration = Double(duration ?? videoDuration)
+        let maxDurationTime = minStartTime + minDuration < videoDuration ? minDuration : videoDuration
         
-        // Ensure we don't have negative values
-        guard minStartTime >= 0 && maxDurationTime > 0 && minStartTime < videoDuration else {
-            result(FlutterError(code: channelName, message: "Invalid time range", details: "startTime: \(minStartTime), duration: \(maxDurationTime), videoDuration: \(videoDuration)"))
-            return
-        }
-        
+        // Log relevant values for debugging from Flutter
+        print("VideoCompressPlugin: compressVideo called")
+        print("  path: \(path)")
+        print("  quality: \(quality)")
+        print("  deleteOrigin: \(deleteOrigin)")
+        print("  startTime: \(String(describing: startTime))")
+        print("  duration: \(String(describing: duration))")
+        print("  includeAudio: \(String(describing: includeAudio))")
+        print("  frameRate: \(String(describing: frameRate))")
+        print("  sourceVideoUrl: \(sourceVideoUrl)")
+        print("  compressionUrl: \(compressionUrl)")
+        print("  videoDuration: \(videoDuration)")
+        print("  minStartTime: \(minStartTime)")
+        print("  minDuration/requested: \(minDuration)")
+        print("  maxDurationTime: \(maxDurationTime)")
         let cmStartTime = CMTimeMakeWithSeconds(minStartTime, preferredTimescale: timescale)
         let cmDurationTime = CMTimeMakeWithSeconds(maxDurationTime, preferredTimescale: timescale)
         let timeRange: CMTimeRange = CMTimeRangeMake(start: cmStartTime, duration: cmDurationTime)
