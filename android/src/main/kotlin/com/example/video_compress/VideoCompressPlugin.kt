@@ -142,15 +142,30 @@ class VideoCompressPlugin : MethodCallHandler, FlutterPlugin {
 
                 val dataSource =
                         if (startTime != null || duration != null) {
+                            val source = UriDataSource(context, Uri.parse(path));
+                            val durationOfSource = source.getDurationUs();
+                            Long startTimeCalculated = 1000L * 1000L * (startTime!!.toLong() ?: 0L);
+                            Long endTimeCalculatedFromDuration = durationOfSource - (startTimeCalculated + (1000L * 1000L * (duration!!.toLong() ?: 0L)));
+                            if (endTimeCalculatedFromDuration < 0) {
+                                result.error(
+                                    channelName, 
+                                    "endTimeCalculatedFromDuration is less than 0 for the given startTime and duration: ${startTime} ${duration}, " +
+                                    "calculeted values are: ${startTimeCalculated} ${endTimeCalculatedFromDuration}, durationOfSource: ${durationOfSource}, path: ${path}", 
+                                    null
+                                )
+                                return;
+                            }
                             Log.e(
                                     TAG,
-                                    "startTime: $startTime, duration: $duration, path: $path, startTime calculated: ${1000L * 1000L * (startTime!!.toLong() ?: 0L)}, duration calculated: ${1000L * 1000L * (duration!!.toLong() ?: 0L)}"
+                                    "startTimeCalculated: $startTimeCalculated, " +
+                                    "endTimeCalculatedFromDuration: $endTimeCalculatedFromDuration, " +
+                                    "durationOfSource: $durationOfSource, " +
+                                    "path: $path"
                             )
-                            val source = UriDataSource(context, Uri.parse(path))
                             TrimDataSource(
                                     source,
-                                    (1000L * 1000L * (startTime!!.toLong() ?: 0L)),
-                                    (1000L * 1000L * (duration!!.toLong() ?: 0L))
+                                    startTimeCalculated,
+                                    endTimeCalculatedFromDuration
                             )
                         } else {
                             UriDataSource(context, Uri.parse(path))
