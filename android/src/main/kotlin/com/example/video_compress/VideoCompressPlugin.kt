@@ -6,6 +6,7 @@ import android.util.Log
 import com.otaliastudios.transcoder.Transcoder
 import com.otaliastudios.transcoder.TranscoderListener
 import com.otaliastudios.transcoder.internal.utils.Logger
+import com.otaliastudios.transcoder.source.ClipDataSource
 import com.otaliastudios.transcoder.source.TrimDataSource
 import com.otaliastudios.transcoder.source.UriDataSource
 import com.otaliastudios.transcoder.strategy.DefaultAudioStrategy
@@ -156,26 +157,9 @@ class VideoCompressPlugin : MethodCallHandler, FlutterPlugin {
                         if (startTime != null || duration != null) {
                             try {
                                 val source = UriDataSource(context, videoUri)
-                                val durationOfSource = source.durationUs
                                 val startTimeCalculated = 1000L * 1000L * startTime!!.toLong()
-                                val endTimeCalculatedFromDuration = durationOfSource - (startTimeCalculated + (1000L * 1000L * duration!!.toLong()))
-                                if (endTimeCalculatedFromDuration < 0) {
-                                    result.error(
-                                        channelName, 
-                                        "endTimeCalculatedFromDuration is less than 0 for the given startTime and duration: $startTime $duration, " +
-                                        "calculated values are: $startTimeCalculated $endTimeCalculatedFromDuration, durationOfSource: $durationOfSource, path: $path",
-                                        null
-                                    )
-                                    return;
-                                }
-                                Log.e(
-                                        TAG,
-                                        "startTimeCalculated: $startTimeCalculated, " +
-                                        "endTimeCalculatedFromDuration: $endTimeCalculatedFromDuration, " +
-                                        "durationOfSource: $durationOfSource, " +
-                                        "path: $path"
-                                )
-                                TrimDataSource(
+                                val endTimeCalculatedFromDuration = startTimeCalculated + (1000L * 1000L * duration!!.toLong())
+                                ClipDataSource(
                                         source,
                                         startTimeCalculated,
                                         endTimeCalculatedFromDuration
