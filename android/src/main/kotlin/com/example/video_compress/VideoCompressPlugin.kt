@@ -140,35 +140,57 @@ class VideoCompressPlugin : MethodCallHandler, FlutterPlugin {
                             RemoveTrackStrategy()
                         }
 
+                // Convert path to proper URI (handle file paths correctly)
+                val videoUri = try {
+                    val file = File(path)
+                    if (file.exists()) {
+                        Uri.fromFile(file)
+                    } else {
+                        Uri.parse(path)
+                    }
+                } catch (e: Exception) {
+                    Uri.parse(path)
+                }
+
                 val dataSource =
                         if (startTime != null || duration != null) {
-                            val source = UriDataSource(context, Uri.parse(path))
-                            val durationOfSource = source.durationUs
-                            val startTimeCalculated = 1000L * 1000L * startTime!!.toLong()
-                            val endTimeCalculatedFromDuration = durationOfSource - (startTimeCalculated + (1000L * 1000L * duration!!.toLong()))
-                            if (endTimeCalculatedFromDuration < 0) {
+                            try {
+                                val source = UriDataSource(context, videoUri)
+                                val durationOfSource = source.durationUs
+                                val startTimeCalculated = 1000L * 1000L * startTime!!.toLong()
+                                val endTimeCalculatedFromDuration = durationOfSource - (startTimeCalculated + (1000L * 1000L * duration!!.toLong()))
+                                if (endTimeCalculatedFromDuration < 0) {
+                                    result.error(
+                                        channelName, 
+                                        "endTimeCalculatedFromDuration is less than 0 for the given startTime and duration: $startTime $duration, " +
+                                        "calculated values are: $startTimeCalculated $endTimeCalculatedFromDuration, durationOfSource: $durationOfSource, path: $path",
+                                        null
+                                    )
+                                    return;
+                                }
+                                Log.e(
+                                        TAG,
+                                        "startTimeCalculated: $startTimeCalculated, " +
+                                        "endTimeCalculatedFromDuration: $endTimeCalculatedFromDuration, " +
+                                        "durationOfSource: $durationOfSource, " +
+                                        "path: $path"
+                                )
+                                TrimDataSource(
+                                        source,
+                                        startTimeCalculated,
+                                        endTimeCalculatedFromDuration
+                                )
+                            } catch (e: Exception) {
+                                Log.e(TAG, "Error creating data source or getting duration: ${e.message}", e)
                                 result.error(
-                                    channelName, 
-                                    "endTimeCalculatedFromDuration is less than 0 for the given startTime and duration: $startTime $duration, " +
-                                    "calculated values are: $startTimeCalculated $endTimeCalculatedFromDuration, durationOfSource: $durationOfSource, path: $path",
+                                    channelName,
+                                    "Failed to read video file. Please check if the file exists and is a valid video file. Path: $path, Error: ${e.message}",
                                     null
                                 )
-                                return;
+                                return
                             }
-                            Log.e(
-                                    TAG,
-                                    "startTimeCalculated: $startTimeCalculated, " +
-                                    "endTimeCalculatedFromDuration: $endTimeCalculatedFromDuration, " +
-                                    "durationOfSource: $durationOfSource, " +
-                                    "path: $path"
-                            )
-                            TrimDataSource(
-                                    source,
-                                    startTimeCalculated,
-                                    endTimeCalculatedFromDuration
-                            )
                         } else {
-                            UriDataSource(context, Uri.parse(path))
+                            UriDataSource(context, videoUri)
                         }
 
                 transcodeFuture =
