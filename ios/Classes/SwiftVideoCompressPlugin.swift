@@ -161,22 +161,12 @@ public class SwiftVideoCompressPlugin: NSObject, FlutterPlugin {
         }
     }
     
-    private func getComposition(_ isIncludeAudio: Bool,_ timeRange: CMTimeRange, _ sourceVideoTrack: AVAssetTrack, _ sourceVideoAsset: AVAsset)->AVAsset {
+    private func getComposition(_ timeRange: CMTimeRange, _ sourceVideoTrack: AVAssetTrack, _ sourceVideoAsset: AVAsset)->AVAsset {
         let composition = AVMutableComposition()
         
-        // Always add video track with timeRange trimming
         let compressionVideoTrack = composition.addMutableTrack(withMediaType: AVMediaType.video, preferredTrackID: kCMPersistentTrackID_Invalid)
         compressionVideoTrack!.preferredTransform = sourceVideoTrack.preferredTransform
-        print("VideoCompressPlugin: Adding video track to composition with timeRange: \(CMTimeGetSeconds(timeRange.start))s to \(CMTimeGetSeconds(timeRange.start) + CMTimeGetSeconds(timeRange.duration))s")
         try? compressionVideoTrack!.insertTimeRange(timeRange, of: sourceVideoTrack, at: CMTime.zero)
-        
-        // Add audio track if requested
-        if isIncludeAudio {
-            if let audioTrack = sourceVideoAsset.tracks(withMediaType: AVMediaType.audio).first {
-                let compressionAudioTrack = composition.addMutableTrack(withMediaType: AVMediaType.audio, preferredTrackID: kCMPersistentTrackID_Invalid)
-                try? compressionAudioTrack!.insertTimeRange(timeRange, of: audioTrack, at: CMTime.zero)
-            }
-        }
         
         return composition    
     }
@@ -207,13 +197,26 @@ public class SwiftVideoCompressPlugin: NSObject, FlutterPlugin {
         
         let isIncludeAudio = includeAudio != nil ? includeAudio! : true
         
-        let session = getComposition(isIncludeAudio, timeRange, sourceVideoTrack!, sourceVideoAsset)
+        let exportAsset: AVAsset
+        let exportTimeRange: CMTimeRange?
         
-        let exporter = AVAssetExportSession(asset: session, presetName: getExportPreset(quality))!
+        if !isIncludeAudio {
+            exportAsset = getComposition(timeRange, sourceVideoTrack!, sourceVideoAsset)
+            exportTimeRange = nil
+        } else {
+            exportAsset = sourceVideoAsset
+            exportTimeRange = timeRange
+        }
+        
+        let exporter = AVAssetExportSession(asset: exportAsset, presetName: getExportPreset(quality))!
         
         exporter.outputURL = compressionUrl
         exporter.outputFileType = AVFileType.mp4
         exporter.shouldOptimizeForNetworkUse = true
+        
+        if let exportTimeRange = exportTimeRange {
+            exporter.timeRange = exportTimeRange
+        }
         
         if frameRate != nil {
             let videoComposition = AVMutableVideoComposition(propertiesOf: sourceVideoAsset)

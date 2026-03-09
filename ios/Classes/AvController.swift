@@ -3,18 +3,18 @@ import AVFoundation
 import MobileCoreServices
 
 class AvController: NSObject {
-    public func getVideoAsset(_ url:URL)->AVURLAsset {
+    public func getVideoAsset(_ url: URL) -> AVURLAsset {
         return AVURLAsset(url: url)
     }
-    
-    public func getTrack(_ asset: AVURLAsset)->AVAssetTrack? {
-        var track : AVAssetTrack? = nil
+
+    public func getTrack(_ asset: AVURLAsset) -> AVAssetTrack? {
+        var track: AVAssetTrack? = nil
         let group = DispatchGroup()
         group.enter()
         asset.loadValuesAsynchronously(forKeys: ["tracks"], completionHandler: {
-            var error: NSError? = nil;
+            var error: NSError?
             let status = asset.statusOfValue(forKey: "tracks", error: &error)
-            if (status == .loaded) {
+            if status == .loaded {
                 track = asset.tracks(withMediaType: AVMediaType.video).first
             }
             group.leave()
@@ -22,8 +22,8 @@ class AvController: NSObject {
         group.wait()
         return track
     }
-    
-    public func getVideoOrientation(_ path:String)-> Int? {
+
+    public func getVideoOrientation(_ path: String) -> Int? {
         let url = Utility.getPathUrl(path)
         let asset = getVideoAsset(url)
         guard let track = getTrack(asset) else {
@@ -41,11 +41,11 @@ class AvController: NSObject {
             return 270
         }
     }
-    
-    public func getMetaDataByTag(_ asset:AVAsset,key:String)->String {
+
+    public func getMetaDataByTag(_ asset: AVAsset, key: String) -> String {
         for item in asset.commonMetadata {
             if item.commonKey?.rawValue == key {
-                return item.stringValue ?? "";
+                return item.stringValue ?? ""
             }
         }
         return ""
