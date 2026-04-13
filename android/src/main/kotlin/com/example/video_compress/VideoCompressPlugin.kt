@@ -59,7 +59,12 @@ class VideoCompressPlugin : MethodCallHandler, FlutterPlugin {
             }
             "getMediaInfo" -> {
                 val path = call.argument<String>("path")
-                result.success(Utility(channelName).getMediaInfoJson(context, path!!).toString())
+                val json = Utility(channelName).getMediaInfoJson(context, path!!)
+                if (json != null) {
+                    result.success(json.toString())
+                } else {
+                    result.error(channelName, "Failed to read media info at $path", null)
+                }
             }
             "deleteAllCache" -> {
                 result.success(Utility(channelName).deleteAllCache(context, result))
@@ -195,6 +200,14 @@ class VideoCompressPlugin : MethodCallHandler, FlutterPlugin {
                                                 val json =
                                                         Utility(channelName)
                                                                 .getMediaInfoJson(context, destPath)
+                                                if (json == null) {
+                                                    result.error(
+                                                        channelName,
+                                                        "Failed to read media info for compressed video at $destPath",
+                                                        null
+                                                    )
+                                                    return
+                                                }
                                                 json.put("isCancel", false)
                                                 result.success(json.toString())
                                                 if (deleteOrigin) {

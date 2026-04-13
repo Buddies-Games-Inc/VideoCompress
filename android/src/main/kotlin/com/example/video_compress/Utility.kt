@@ -31,49 +31,63 @@ class Utility(private val channelName: String) {
         return timeStamp.toLong()
     }
 
-    fun getMediaInfoJson(context: Context, path: String): JSONObject {
+    fun getMediaInfoJson(context: Context, path: String): JSONObject? {
         val file = File(path)
+        if (!file.exists()) {
+            android.util.Log.e("video_compress", "getMediaInfoJson: file does not exist at $path")
+            return null
+        }
+
         val retriever = MediaMetadataRetriever()
+        try {
+            retriever.setDataSource(context, Uri.fromFile(file))
 
-        retriever.setDataSource(context, Uri.fromFile(file))
+            val durationStr = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
+            val title = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_TITLE) ?: ""
+            val author = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_AUTHOR) ?: ""
+            val widthStr = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH)
+            val heightStr = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT)
+            val duration = java.lang.Long.parseLong(durationStr)
+            var width = java.lang.Long.parseLong(widthStr)
+            var height = java.lang.Long.parseLong(heightStr)
+            val filesize = file.length()
+            val orientation = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR1) {
+                retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_ROTATION)
+            } else {
+                null
+            }
+            val ori = orientation?.toIntOrNull()
+            if (ori != null && isLandscapeImage(ori)) {
+                val tmp = width
+                width = height
+                height = tmp
+            }
 
-        val durationStr = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
-        val title = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_TITLE) ?: ""
-        val author = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_AUTHOR) ?: ""
-        val widthStr = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH)
-        val heightStr = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT)
-        val duration = java.lang.Long.parseLong(durationStr)
-        var width = java.lang.Long.parseLong(widthStr)
-        var height = java.lang.Long.parseLong(heightStr)
-        val filesize = file.length()
-        val orientation = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR1) {
-            retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_ROTATION)
-        } else {
-            null
+            val json = JSONObject()
+            json.put("path", path)
+            json.put("title", title)
+            json.put("author", author)
+            json.put("width", width)
+            json.put("height", height)
+            json.put("duration", duration)
+            json.put("filesize", filesize)
+            if (ori != null) {
+                json.put("orientation", ori)
+            }
+            return json
+        } catch (e: IllegalArgumentException) {
+            android.util.Log.e("video_compress", "getMediaInfoJson: invalid data source at $path", e)
+            return null
+        } catch (e: RuntimeException) {
+            android.util.Log.e("video_compress", "getMediaInfoJson: failed to read media at $path", e)
+            return null
+        } finally {
+            try {
+                retriever.release()
+            } catch (e: RuntimeException) {
+                android.util.Log.w("video_compress", "getMediaInfoJson: error releasing retriever", e)
+            }
         }
-        val ori = orientation?.toIntOrNull()
-        if (ori != null && isLandscapeImage(ori)) {
-            val tmp = width
-            width = height
-            height = tmp
-        }
-
-        retriever.release()
-
-        val json = JSONObject()
-
-        json.put("path", path)
-        json.put("title", title)
-        json.put("author", author)
-        json.put("width", width)
-        json.put("height", height)
-        json.put("duration", duration)
-        json.put("filesize", filesize)
-        if (ori != null) {
-            json.put("orientation", ori)
-        }
-
-        return json
     }
 
     fun getBitmap(path: String, position: Long, result: MethodChannel.Result): Bitmap {
