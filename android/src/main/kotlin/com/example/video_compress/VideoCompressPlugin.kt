@@ -167,7 +167,7 @@ class VideoCompressPlugin : MethodCallHandler, FlutterPlugin {
                                     val endUs = startUs + (1000L * 1000L * duration.toLong())
                                     ClipDataSource(source, startUs, endUs)
                                 } else if (startUs > 0) {
-                                    TrimDataSource(source, startUs, 0)
+                                    TrimDataSource(source, startUs)
                                 } else {
                                     source
                                 }
