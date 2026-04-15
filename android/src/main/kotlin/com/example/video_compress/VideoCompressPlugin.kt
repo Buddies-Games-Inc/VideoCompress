@@ -67,7 +67,7 @@ class VideoCompressPlugin : MethodCallHandler, FlutterPlugin {
                 }
             }
             "deleteAllCache" -> {
-                result.success(Utility(channelName).deleteAllCache(context, result))
+                result.success(Utility(channelName).deleteAllCache(context))
             }
             "setLogLevel" -> {
                 val logLevel = call.argument<Int>("logLevel")!!
@@ -162,15 +162,17 @@ class VideoCompressPlugin : MethodCallHandler, FlutterPlugin {
                         if (startTime != null || duration != null) {
                             try {
                                 val source = UriDataSource(context, videoUri)
-                                val startTimeCalculated = 1000L * 1000L * startTime!!.toLong()
-                                val endTimeCalculatedFromDuration = startTimeCalculated + (1000L * 1000L * duration!!.toLong())
-                                ClipDataSource(
-                                        source,
-                                        startTimeCalculated,
-                                        endTimeCalculatedFromDuration
-                                )
+                                val startUs = 1000L * 1000L * (startTime?.toLong() ?: 0L)
+                                if (duration != null) {
+                                    val endUs = startUs + (1000L * 1000L * duration.toLong())
+                                    ClipDataSource(source, startUs, endUs)
+                                } else if (startUs > 0) {
+                                    TrimDataSource(source, startUs)
+                                } else {
+                                    source
+                                }
                             } catch (e: Exception) {
-                                Log.e(TAG, "Error creating data source or getting duration: ${e.message}", e)
+                                Log.e(TAG, "Error creating data source: ${e.message}", e)
                                 result.error(
                                     channelName,
                                     "Failed to read video file. Please check if the file exists and is a valid video file. Path: $path, Error: ${e.message}",
